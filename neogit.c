@@ -7,13 +7,201 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
+#include <windows.h>
 
 #define MAX_FILENAME_LENGTH 1000
 #define MAX_COMMIT_MESSAGE_LENGTH 2000
 #define MAX_LINE_LENGTH 1000
 #define MAX_MESSAGE_LENGTH 1000
+#define MAX_BUFFER_SIZE 1024
 #define debug(x) printf("%s", x);
 #define BUFFER_SIZE 1024
+#ifndef __USE_MISC
+#define __USE_MISC
+#endif
+
+int comperror(const char *filename, int isCpp)
+{
+    const char *compiler = isCpp ? "g++" : "gcc";
+    char command[256];
+    snprintf(command, sizeof(command), "%s -o /dev/null -Wall -Wextra -Werror %s", compiler, filename);
+    int result = system(command);
+    return result == 0 ? 1 : 0;
+}
+
+typedef struct
+{
+    char bracket;
+    int position;
+} BracketInfo;
+
+typedef struct
+{
+    BracketInfo *array;
+    int size;
+    int capacity;
+} BracketStack;
+
+BracketStack *createBracketStack(int capacity)
+{
+    BracketStack *stack = (BracketStack *)malloc(sizeof(BracketStack));
+    stack->array = (BracketInfo *)malloc(capacity * sizeof(BracketInfo));
+    stack->size = 0;
+    stack->capacity = capacity;
+    return stack;
+}
+
+void push(BracketStack *stack, char bracket, int position)
+{
+    if (stack->size == stack->capacity)
+    {
+        stack->capacity *= 2;
+        stack->array = (BracketInfo *)realloc(stack->array, stack->capacity * sizeof(BracketInfo));
+    }
+    stack->array[stack->size].bracket = bracket;
+    stack->array[stack->size].position = position;
+    stack->size++;
+}
+
+char pop(BracketStack *stack)
+{
+    if (stack->size > 0)
+    {
+        stack->size--;
+        return stack->array[stack->size].bracket;
+    }
+    return '\0';
+}
+
+void freeBracketStack(BracketStack *stack)
+{
+    free(stack->array);
+    free(stack);
+}
+
+int bracket(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return -1;
+    }
+    BracketStack *stack = createBracketStack(10);
+    int position = 0;
+    char ch;
+    while ((ch = fgetc(file)) != EOF)
+    {
+        position++;
+        if (ch == '(' || ch == '[' || ch == '{')
+        {
+            push(stack, ch, position);
+        }
+        else if (ch == ')' || ch == ']' || ch == '}')
+        {
+            char lastBracket = pop(stack);
+            if ((lastBracket == '(' && ch != ')') ||
+                (lastBracket == '[' && ch != ']') ||
+                (lastBracket == '{' && ch != '}'))
+            {
+                freeBracketStack(stack);
+                fclose(file);
+                return position;
+            }
+        }
+    }
+    fclose(file);
+    if (stack->size > 0)
+    {
+        int unmatchedPosition = stack->array[stack->size - 1].position;
+        freeBracketStack(stack);
+        return unmatchedPosition;
+    }
+    freeBracketStack(stack);
+    return 0;
+}
+
+int white(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return -1;
+    }
+    int result = 0;
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (fileSize > 0)
+    {
+        char *buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
+        if (buffer == NULL)
+        {
+            fclose(file);
+            perror("Memory allocation error");
+            return -1;
+        }
+        fseek(file, -MAX_BUFFER_SIZE, SEEK_END);
+        size_t bytesRead = fread(buffer, 1, MAX_BUFFER_SIZE, file);
+        if (bytesRead > 0)
+        {
+            for (size_t i = bytesRead - 1; i >= 0; --i)
+            {
+                if (buffer[i] == ' ' || buffer[i] == '\t' || buffer[i] == '\n' || buffer[i] == '\r')
+                {
+                    result = 1;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        free(buffer);
+    }
+    fclose(file);
+    return result;
+}
+
+void removewhite(const char *filename)
+{
+    FILE *file = fopen(filename, "r+");
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (fileSize > 0)
+    {
+        char *buffer = (char *)malloc(MAX_BUFFER_SIZE * sizeof(char));
+        if (buffer == NULL)
+        {
+            fclose(file);
+            perror("Memory allocation error");
+            return;
+        }
+        fseek(file, -MAX_BUFFER_SIZE, SEEK_END);
+        size_t bytesRead = fread(buffer, 1, MAX_BUFFER_SIZE, file);
+        if (bytesRead > 0)
+        {
+            size_t index;
+            for (index = bytesRead - 1; index >= 0; --index)
+            {
+                if (buffer[index] != ' ' && buffer[index] != '\t' && buffer[index] != '\n' && buffer[index] != '\r')
+                {
+                    break;
+                }
+            }
+            ftruncate(fileno(file), ftell(file) - (bytesRead - index - 1));
+        }
+        free(buffer);
+    }
+    fclose(file);
+}
 
 int compareFiles(const char *file1, const char *file2)
 {
@@ -67,7 +255,7 @@ int in_file(const char *s, const char *filename)
     return found;
 }
 
-int min(int a, int b)
+int mina(int a, int b)
 {
     if (b < a)
         return b;
@@ -98,15 +286,92 @@ int number_of_lines(char *add)
     return i;
 }
 
+int ttodo(char *path)
+{
+    char line[256];
+    FILE *file = fopen(path, "r");
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        if (strstr(line, "TODO") != NULL)
+        {
+            fclose(file);
+            return 1;
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+int ctodo(char *path)
+{
+    char line[256];
+    int insideBlockComment = 0;
+    int insideSingleLineComment = 0;
+    FILE *file = fopen(path, "r");
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        char *todoInComment = strstr(line, "TODO");
+        if (strstr(line, "/*") != NULL)
+        {
+            insideBlockComment = 1;
+        }
+        if (insideSingleLineComment == 0)
+        {
+            char *singleLineCommentStart = strstr(line, "//");
+            if (singleLineCommentStart != NULL)
+            {
+                char *todoInSingleLineComment = strstr(singleLineCommentStart, "TODO");
+                if (todoInSingleLineComment != NULL)
+                {
+                    fclose(file);
+                    return 1;
+                }
+            }
+        }
+        if ((insideBlockComment || insideSingleLineComment) && todoInComment != NULL)
+        {
+            fclose(file);
+            return 1;
+        }
+        if (strstr(line, "*/") != NULL)
+        {
+            insideBlockComment = 0;
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+int find_line(char *address, char *text)
+{
+    FILE *ptr;
+    ptr = fopen(address, "r");
+    int i = 0;
+    char line[1024];
+    while (fgets(line, sizeof(line), ptr) != NULL)
+    {
+        line[strlen(line) - 1] = '\0';
+        if (!strcmp(line, text))
+        {
+            fclose(ptr);
+            return i;
+        }
+        i++;
+    }
+    fclose(ptr);
+    return -1;
+}
+
 int fins(char *first, char *second)
 {
-    if (strncmp(first, second, min(strlen(first), strlen(second))) == 0)
+    if (strncmp(first, second, mina(strlen(first), strlen(second))) == 0)
     {
         if (strlen(first) <= strlen(second))
             return 1;
     }
     return 0;
 }
+
 int *lines_of_ers(int *lines, char *address, char *entry)
 {
     FILE *ptr = fopen(address, "r");
@@ -126,6 +391,7 @@ int *lines_of_ers(int *lines, char *address, char *entry)
     fclose(ptr);
     return lines;
 }
+
 int is_file(char *path)
 {
     struct stat file_stat;
@@ -149,6 +415,7 @@ int is_file(char *path)
         return -1;
     }
 }
+
 char *out_line(int number, char *add, char *line2)
 {
     FILE *ptr;
@@ -322,7 +589,9 @@ int count_stage()
     }
     return y;
 }
+
 void print_command(int argc, char *const argv[]);
+
 void find_name(char *name)
 {
     char cwd[1024];
@@ -357,21 +626,31 @@ void find_name(char *name)
         }
     } while (strlen(tmp_cwd) > 4 && !exists);
 }
+
 int run_init(int argc, char *const argv[]);
+
 int create_configs(char *username, char *email, int halat);
 
 int run_add(int argc, char *const argv[]);
+
 int add_to_staging(char *filepath);
 
 int remove_from_staging(char *filepath);
 
 int run_commit(int argc, char *const argv[]);
+
 int inc_last_commit_ID();
+
 bool check_file_directory_exists(char *filepath);
+
 int commit_staged_file(int commit_ID, char *filepath);
+
 int track_file(char *filepath);
+
 bool is_tracked(char *filepath);
+
 int create_commit_file(int commit_ID, char *message);
+
 int find_file_last_commit(char *filepath);
 
 int parseTime(const char *timeString, struct tm *tmResult)
@@ -434,8 +713,47 @@ double calculateTimeDifference(const char *timeString1, const char *timeString2)
 }
 
 int run_checkout(int argc, char *const argv[]);
+
 int find_file_last_change_before_commit(char *filepath, int commit_ID);
+
 int checkout_file(char *filepath, int commit_ID);
+
+const char *format(const char *filename)
+{
+    const char *extension = strrchr(filename, '.');
+    if (extension != NULL)
+    {
+        if (strcmp(extension, ".txt") == 0)
+        {
+            return "txt";
+        }
+        else if (strcmp(extension, ".c") == 0)
+        {
+            return "c";
+        }
+        else if (strcmp(extension, ".cpp") == 0)
+        {
+            return "c";
+        }
+        else if (strcmp(extension, ".mp4") == 0)
+        {
+            return "mp4";
+        }
+        else if (strcmp(extension, ".mp3") == 0)
+        {
+            return "mp3";
+        }
+        else if (strcmp(extension, ".wav") == 0)
+        {
+            return "wav";
+        }
+        else
+        {
+            return "Unknown File Format";
+        }
+    }
+    return "No Extension";
+}
 
 int last_commit()
 {
@@ -469,6 +787,7 @@ void print_command(int argc, char *const argv[])
     }
     fprintf(stdout, "\n");
 }
+
 int run_init(int argc, char *const argv[])
 {
     char cwd[1024];
@@ -553,6 +872,10 @@ int run_init(int argc, char *const argv[])
         fclose(file);
         file = fopen(".neogit/comat/count", "w");
         fclose(file);
+        file = fopen(".neogit/comat/which", "w");
+        fclose(file);
+        file = fopen(".neogit/comat/heads", "w");
+        fclose(file);
         file = fopen(".neogit/status", "w");
         fclose(file);
     }
@@ -562,6 +885,7 @@ int run_init(int argc, char *const argv[])
     }
     return 0;
 }
+
 int create_configs(char *username, char *email, int halat)
 {
     char entry[1000];
@@ -658,7 +982,6 @@ void add_wildcard(char *wild, char *s_path)
     }
 }
 
-// bayad check shavad datoor be soorate: neogit add -f :bashad.
 void f_add(int argc, char *const argv[])
 {
     char *out[1000];
@@ -953,6 +1276,11 @@ int run_commit(int argc, char *const argv[])
                 system("del /Q /S /F .neogit\\stage_area\\*.*");
 
                 printf("commit id:%d\ncommit time:%scommit message:%s", y, timeString, argv[3]);
+                gh = fopen(".neogit\\which", "w");
+                char veryverytmp[1024];
+                sprintf(veryverytmp, "%d", y);
+                fprintf(veryverytmp, sizeof(veryverytmp), gh);
+                fclose(gh);
             }
             chdir(cwd1);
         }
@@ -1135,6 +1463,73 @@ char *print_status(int x, int y, char *out)
     return (out);
 }
 
+int files_status(int argc, char *const argv[], char *path)
+{
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    char tmpcwd[1024];
+    strcpy(tmpcwd, cwd);
+    find_name(".neogit");
+    getcwd(cwd, sizeof(cwd));
+    int flag = 1;
+    char tmp[1024];
+    char tmp2[1024];
+    int y = last_commit();
+    char add[1024] = ".neogit\\commits\\commit";
+    char tmptmp[1024];
+    sprintf(tmptmp, "%d\\", y);
+    strcat(add, tmptmp);
+    char tmp3[1024];
+    FILE *ptr = fopen(".neogit\\status", "w");
+    fclose(ptr);
+    stat_tree(".", ".neogit\\status");
+    ptr = fopen(".neogit\\status", "r");
+    char tmp4[1024];
+    while (fgets(tmp, sizeof(tmp), ptr) != NULL)
+    {
+        char *ggh = strrchr(tmp, '\n');
+        *ggh = '\0';
+        int x = 0, y = 0;
+        strcpy(tmp4, ".neogit\\stage_area\\");
+        strcpy(tmp3, path);
+        strcpy(tmp2, cwd);
+        strcat(tmp2, "\\");
+        char *gh = strrchr(tmp, '.');
+        strcat(tmp2, gh + 2);
+        change_word(tmp2, '\\', '$');
+        char *tmpgh = tmp2;
+        if (*tmpgh == 'C' && *(tmpgh + 1) == ':')
+            tmpgh += 2;
+        strcat(tmp3, tmpgh);
+        strcat(tmp4, tmpgh);
+        if (is_file(tmp) == 1)
+        {
+            if (is_file(tmp4) == 1) // is it staged?
+            {
+                x = 1;
+            }
+            if (is_file(tmp3) == 1) // is it commited?
+            {
+                if (!compareFiles(tmp, tmp3))
+                {
+                    y = 1; // modified
+                }
+                else
+                    y = -1;
+            }
+            else
+            {
+                y = 2; // added
+            }
+            char out[2] = "\0\0";
+            if (y == 1)
+                flag = 0;
+        }
+    }
+    chdir(cwd);
+    return flag;
+}
+
 int run_status(int argc, char *const argv[])
 {
     char cwd[1024];
@@ -1148,9 +1543,15 @@ int run_status(int argc, char *const argv[])
         char tmp[1024];
         char tmp2[1024];
         int y = last_commit();
+        FILE *tmpfile = fopen(".neogit\\which", "r");
+        char ghtmp[1024];
+        fgets(ghtmp, sizeof(ghtmp), tmpfile);
+        char *fortmp = strrchr(ghtmp, '\n');
+        if (fortmp != NULL)
+            *fortmp = '\0';
         char add[1024] = ".neogit\\commits\\commit";
         char tmptmp[1024];
-        sprintf(tmptmp, "%d\\", y);
+        sprintf(tmptmp, "%s\\", fortmp);
         strcat(add, tmptmp);
         char tmp3[1024];
         FILE *ptr = fopen(".neogit\\status", "w");
@@ -1410,20 +1811,70 @@ int run_checkout(int argc, char *const argv[])
 {
     if (argc < 3)
         return 1;
-
-    int commit_ID = atoi(argv[2]);
-
-    DIR *dir = opendir(".");
-    struct dirent *entry;
-    // while((entry = readdir(dir)) != NULL) {
-    //     if (entry->d_type == DT_REG && is_tracked(entry->d_name)) {
-    //         checkout_file(entry->d_name, find_file_last_change_before_commit(entry->d_name, commit_ID));
-    //     }
-    // }
-    closedir(dir);
-
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    char add[1024];
+    strcpy(add, ".neogit\\commits\\commit");
+    find_name(".neogit");
+    FILE *ptr = fopen(".neogit\\which", "r");
+    char t[1024];
+    int x;
+    fgets(t, sizeof(t), ptr);
+    x = atoi(t);
+    fclose(ptr);
+    char *remove = strrchr(t, '\n');
+    if (remove != NULL)
+        *remove = '\0';
+    int y = atoi(argv[2]);
+    char tmp[1024];
+    char thisis[1024];
+    char thatis[1024] = "";
+    strcpy(thisis, add);
+    strcat(thisis, t);
+    sprintf(thatis, "%s", remove);
+    sprintf(tmp, "%d", y);
+    fprintf(ptr, "%s", tmp);
+    strcat(add, tmp);
+    if (files_status(argc, argv, thisis))
+    {
+        DIR *dir = opendir(add);
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            if (strcmp(entry->d_name, "..") && strcmp(entry->d_name, "."))
+            {
+                char tmpadd[1024];
+                strcpy(tmpadd, add);
+                strcat(tmpadd, "\\");
+                strcat(tmpadd, entry->d_name);
+                char name[1024];
+                strcpy(name, entry->d_name);
+                char first[1024] = "C:";
+                strcat(first, name);
+                change_word(first, '$', '\\');
+                char ghgh[1024];
+                strcpy(ghgh, first);
+                char *this = strrchr(ghgh, '\\');
+                *this = '\0';
+                char command[2048] = "IF NOT EXIST ";
+                strcat(command, ghgh);
+                strcat(command, " mkdir ");
+                strcat(command, ghgh);
+                system(command);
+                char command2[2048];
+                strcpy(command2, "copy ");
+                strcat(command2, tmpadd);
+                strcat(command2, " ");
+                strcat(command2, first);
+                system(command2);
+            }
+        }
+        closedir(dir);
+    }
+    chdir(cwd);
     return 0;
 }
+
 int run_config(int argc, char *argv[])
 {
     char cwd[1000];
@@ -1495,6 +1946,7 @@ int run_config(int argc, char *argv[])
         chdir(cwd);
     }
 }
+
 int find_file_last_change_before_commit(char *filepath, int commit_ID)
 {
     char filepath_dir[MAX_FILENAME_LENGTH];
@@ -1549,6 +2001,7 @@ int checkout_file(char *filepath, int commit_ID)
 
     return 0;
 }
+
 int run_alias(int argc, char *argv[])
 {
     find_name(".neogit");
@@ -1578,8 +2031,12 @@ int run_alias(int argc, char *argv[])
     printf("invalid command");
     return 1;
 }
+
 int main(int argc, char *argv[])
 {
+    FILE *ptr = fopen("check.c", "r");
+    printf("%d", ctodo(ptr));
+    fclose(ptr);
     if (argc < 2)
     {
         fprintf(stdout, "please enter a valid command");
