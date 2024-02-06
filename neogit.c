@@ -1244,6 +1244,7 @@ int run_add(int argc, char *const argv[])
                     if (strcmp(argv[1], "add") == 0)
                     {
                         add_to_file(entry, ".neogit/staging");
+                        add_to_file(entry, ".neogit/tracks");
                     }
                 }
                 fclose(ptr_rel);
@@ -1367,6 +1368,12 @@ int run_commit(int argc, char *const argv[])
                 tmp = fopen(".neogit/comat/id", "a");
                 fprintf(tmp, "%d\n", y);
                 fclose(tmp);
+                printf("GET READY");
+                tmp = fopen(".neogit/which", "w");
+                fprintf(tmp, "%d\n", y);
+                char poop[1024];
+                printf("%s", out_line(0, ".neogit/which", poop));
+                fclose(tmp);
 
                 // name
                 tmp = fopen(".neogit/config", "r");
@@ -1403,7 +1410,7 @@ int run_commit(int argc, char *const argv[])
                 strcat(address, x);
                 mkdir(address);
 
-                // copying the last commit on this branch
+                // copying the last commit on this branch, if still exists
                 tmp = fopen(".neogit/comat/branches", "r");
                 FILE *tmp2 = fopen(".neogit/config", "r");
                 out_line(4, ".neogit/config", tmptxt);
@@ -1419,7 +1426,31 @@ int run_commit(int argc, char *const argv[])
                         strcat(verytmp, " .neogit\\commits\\commit");
                         sprintf(tootmp, "%d", y);
                         strcat(verytmp, tootmp);
+
                         system(verytmp);
+                        DIR *dir = opendir(tootmp);
+                        struct dirent *entry;
+                        while ((entry = readdir(dir)) != NULL)
+                        {
+                            char s[1024];
+                            strcpy(s, entry->d_name);
+                            char ghs[1024];
+                            strcpy(ghs, s);
+                            if (strcmp(s, ".") && strcmp(s, ".."))
+                            {
+                                change_word(s, '$', '\\');
+                                char s2[1024] = "C:";
+                                strcat(s2, s);
+                                if (is_file(s2) != -1)
+                                {
+                                    char tgh[1024];
+                                    strcpy(tgh, tootmp);
+                                    strcat(tgh, "\\");
+                                    strcat(tgh, s2);
+                                    remove(s2);
+                                }
+                            }
+                        }
                         break;
                     }
                 }
@@ -1437,11 +1468,6 @@ int run_commit(int argc, char *const argv[])
                 system("del /Q /S /F .neogit\\stage_area\\*.*");
 
                 printf("commit id:%d\ncommit time:%scommit message:%s", y, timeString, argv[3]);
-                gh = fopen(".neogit\\which", "w");
-                char veryverytmp[1024];
-                sprintf(veryverytmp, "%d", y);
-                fprintf(veryverytmp, sizeof(veryverytmp), gh);
-                fclose(gh);
             }
             chdir(cwd1);
         }
@@ -1710,9 +1736,10 @@ int run_status(int argc, char *const argv[])
         char *fortmp = strrchr(ghtmp, '\n');
         if (fortmp != NULL)
             *fortmp = '\0';
+        fclose(tmpfile);
         char add[1024] = ".neogit\\commits\\commit";
         char tmptmp[1024];
-        sprintf(tmptmp, "%s\\", fortmp);
+        sprintf(tmptmp, "%s\\", ghtmp);
         strcat(add, tmptmp);
         char tmp3[1024];
         FILE *ptr = fopen(".neogit\\status", "w");
@@ -1729,7 +1756,7 @@ int run_status(int argc, char *const argv[])
             strcpy(tmp3, add);
             strcpy(tmp2, cwd);
             strcat(tmp2, "\\");
-            char *gh = strrchr(tmp, '.');
+            char *gh = strstr(tmp, ".\\");
             strcat(tmp2, gh + 2);
             change_word(tmp2, '\\', '$');
             char *tmpgh = tmp2;
@@ -1790,7 +1817,6 @@ int run_status(int argc, char *const argv[])
             {
                 y = 0;
             }
-            printf("this is tmp4!%s\n", tmp4);
             if (is_file(tmp4) == 1) // staged?
             {
                 x = 1;
@@ -1967,7 +1993,7 @@ int run_pre(int argc, char *const argv[])
                             }
                             else
                             {
-                                printf("todo-check--------------------------SKIPPED\n", 'y');
+                                printf_color("todo-check--------------------------SKIPPED\n", 'y');
                             }
                         }
                         else if (!strcmp(line, "eof-blank-space"))
@@ -1982,7 +2008,7 @@ int run_pre(int argc, char *const argv[])
                             }
                             else
                             {
-                                printf("eof-blank-space--------------------------SKIPPED\n", 'y');
+                                printf_color("eof-blank-space--------------------------SKIPPED\n", 'y');
                             }
                         }
                         else if (!strcmp(line, "format-check"))
@@ -2006,7 +2032,7 @@ int run_pre(int argc, char *const argv[])
                             }
                             else
                             {
-                                printf("balance-braces--------------------------SKIPPED\n", 'y');
+                                printf_color("balance-braces--------------------------SKIPPED\n", 'y');
                             }
                         }
                         else if (!strcmp(line, "static-error-check"))
@@ -2024,7 +2050,7 @@ int run_pre(int argc, char *const argv[])
                             }
                             else
                             {
-                                printf("static-error-check--------------------------SKIPPED\n", 'y');
+                                printf_color("static-error-check--------------------------SKIPPED\n", 'y');
                             }
                         }
                         else if (!strcmp(line, "file-size-check"))
@@ -2047,9 +2073,76 @@ int run_pre(int argc, char *const argv[])
                             }
                             else
                             {
-                                printf("character-limit--------------------------SKIPPED\n", 'y');
+                                printf_color("character-limit--------------------------SKIPPED\n", 'y');
                             }
                         }
+                    }
+                    fclose(ptr);
+                    printf("\n");
+                }
+            }
+            qwe++;
+        }
+        fclose(file);
+        chdir(cwd);
+    }
+    else if (argc == 3 && !strcmp(argv[2], "-u"))
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+        find_name(".neogit");
+        char stage[1024];
+        FILE *file = fopen(".neogit/staging", "r");
+        int qwe = 0;
+        char *that = (char *)malloc(sizeof(char) * 1024);
+        while (fgets(stage, sizeof(stage), file) != NULL)
+        {
+            int flag = 1;
+            char *t = strrchr(stage, '\n');
+            if (t != NULL)
+            {
+                *t = '\0';
+            }
+            if (!strcmp(stage, "*"))
+            {
+                continue;
+            }
+            if (flag)
+            {
+                char line[1024];
+                char form[1024];
+                strcpy(form, format(stage));
+                char tmptmp[1024];
+                strcpy(tmptmp, stage);
+                change_word(tmptmp, '$', '\\');
+                char ghghg[1024];
+                strcpy(ghghg, tmptmp);
+                char tmpcwd[1024];
+                strcpy(tmpcwd, cwd);
+                strcat(tmpcwd, "\\.neogit\\stage_area\\");
+                char verytmp[1024];
+                int i = 0;
+                while (stage[i + 1] != '\0')
+                {
+                    verytmp[i] = stage[i + 2];
+                    i++;
+                }
+                change_word(verytmp, '\\', '$');
+                strcat(tmpcwd, verytmp);
+                strcpy(tmptmp, tmpcwd);
+                if (is_file(tmptmp) == 1)
+                {
+                    printf("%s", ghghg);
+                    printf("\n");
+                    FILE *ptr = fopen(".neogit/hooks", "r");
+                    while (fgets(line, sizeof(line), ptr) != NULL)
+                    {
+                        char *t = strrchr(line, '\n');
+                        if (t != NULL)
+                        {
+                            *t = '\0';
+                        }
+                        removewhite(tmptmp);
                     }
                     fclose(ptr);
                     printf("\n");
@@ -2167,6 +2260,197 @@ int run_pre(int argc, char *const argv[])
         chdir(cwd);
     }
 }
+
+int run_tag(int argc, char *const argv[])
+{
+    if (argc == 3)
+    {
+        perror("please enter a commit message");
+        return 1;
+    }
+    else if (argc == 4)
+    {
+        if (strlen(argv[3]) > 72)
+        {
+            perror("commit message is too long");
+        }
+        else
+        {
+            char cwd1[1024];
+            getcwd(cwd1, sizeof(cwd1));
+            find_name(".neogit");
+            // is stage_area empty ?
+            if (stage_emp())
+            {
+                perror("no files staged! nothing to commit.");
+                chdir(cwd1);
+                return 1;
+            }
+            else
+            {
+                // which commit is it ? (commit count) int y;
+                int y;
+                FILE *ptr = fopen(".neogit\\commit", "r");
+                if (ptr == NULL)
+                {
+                    fclose(ptr);
+                    ptr = fopen(".neogit\\commit", "w");
+                    fprintf(ptr, "1");
+                    fclose(ptr);
+                    y = 1;
+                }
+                else
+                {
+                    char xtmp[1024];
+                    fscanf(ptr, "%s", xtmp);
+                    y = atoi(xtmp);
+                    fclose(ptr);
+                    ptr = fopen(".neogit\\commit", "w");
+                    fprintf(ptr, "%d", y + 1);
+                    fclose(ptr);
+                    y++;
+                }
+
+                // saving commit data
+
+                // time
+                time_t currentTime = time(NULL);
+                if (currentTime == -1)
+                {
+                    perror("Error getting current time");
+                    return 1;
+                }
+                char *timeString = ctime(&currentTime);
+                FILE *tmp;
+                char tmptxt[1024] = "";
+
+                tmp = fopen(".neogit/comat/time", "a");
+                fprintf(tmp, "%s", timeString);
+                fclose(tmp);
+
+                // id
+                tmp = fopen(".neogit/comat/id", "a");
+                fprintf(tmp, "%d\n", y);
+                fclose(tmp);
+                printf("GET READY");
+                tmp = fopen(".neogit/which", "w");
+                fprintf(tmp, "%d\n", y);
+                char poop[1024];
+                printf("%s", out_line(0, ".neogit/which", poop));
+                fclose(tmp);
+
+                // name
+                tmp = fopen(".neogit/config", "r");
+                out_line(0, ".neogit/config", tmptxt);
+                fclose(tmp);
+                tmp = fopen(".neogit/comat/name", "a");
+                fprintf(tmp, "%s\n", tmptxt);
+                fclose(tmp);
+
+                // branch
+                tmp = fopen(".neogit/config", "r");
+                out_line(4, ".neogit/config", tmptxt);
+                fclose(tmp);
+                tmp = fopen(".neogit/comat/branch", "a");
+                fprintf(tmp, "%s\n", tmptxt);
+                fclose(tmp);
+
+                // message
+                strcpy(tmptxt, argv[3]);
+                tmp = fopen(".neogit/comat/message", "a");
+                fprintf(tmp, "%s\n", tmptxt);
+                fclose(tmp);
+
+                // count
+                int tmpy = count_stage();
+                tmp = fopen(".neogit/comat/count", "a");
+                fprintf(tmp, "%d\n", tmpy);
+                fclose(tmp);
+
+                // making the destination directory
+                char x[1024];
+                sprintf(x, "%d", y);
+                char address[1024] = ".neogit\\commits\\commit";
+                strcat(address, x);
+                mkdir(address);
+
+                // copying the last commit on this branch, if still exists
+                tmp = fopen(".neogit/comat/branches", "r");
+                FILE *tmp2 = fopen(".neogit/config", "r");
+                out_line(4, ".neogit/config", tmptxt);
+                char ghgh[1024];
+                for (int i = y - 1; i > -1; i--)
+                {
+                    if (strcmp(out_line(i, ".neogit/comat/branch", ghgh), tmptxt) == 0)
+                    {
+                        char verytmp[1024] = "xcopy /q /y .neogit\\commits\\commit";
+                        char tootmp[1024];
+                        sprintf(tootmp, "%d", i);
+                        strcat(verytmp, tootmp);
+                        strcat(verytmp, " .neogit\\commits\\commit");
+                        sprintf(tootmp, "%d", y);
+                        strcat(verytmp, tootmp);
+
+                        system(verytmp);
+                        DIR *dir = opendir(tootmp);
+                        struct dirent *entry;
+                        while ((entry = readdir(dir)) != NULL)
+                        {
+                            char s[1024];
+                            strcpy(s, entry->d_name);
+                            char ghs[1024];
+                            strcpy(ghs, s);
+                            if (strcmp(s, ".") && strcmp(s, ".."))
+                            {
+                                change_word(s, '$', '\\');
+                                char s2[1024] = "C:";
+                                strcat(s2, s);
+                                if (is_file(s2) != -1)
+                                {
+                                    char tgh[1024];
+                                    strcpy(tgh, tootmp);
+                                    strcat(tgh, "\\");
+                                    strcat(tgh, s2);
+                                    remove(s2);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                fclose(tmp);
+                fclose(tmp2);
+
+                // copying staged files to the destination
+                char sysy[1024] = "xcopy /q /y .neogit\\stage_area ";
+                strcat(sysy, address);
+                system(sysy);
+
+                // removing files from staged_area dir and staging file
+                FILE *gh = fopen(".neogit\\staging", "w");
+                fclose(gh);
+                system("del /Q /S /F .neogit\\stage_area\\*.*");
+
+                printf("commit id:%d\ncommit time:%scommit message:%s", y, timeString, argv[3]);
+            }
+            chdir(cwd1);
+        }
+    }
+    else
+    {
+        perror("If your message has white_spaces, it must include double qoutes at the beginning and at the end of the message");
+        return 1;
+    }
+}
+
+int run_grep(int argc, char *const argv[])
+{
+}
+
+int run_diff(int argc, char *const argv[])
+{
+}
+
 int track_file(char *filepath)
 {
     if (is_tracked(filepath))
@@ -2260,6 +2544,217 @@ int find_file_last_commit(char *filepath)
     return max;
 }
 
+int for_revert(int argc, char *const argv[])
+{
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    char tmpcwd[1024];
+    strcpy(tmpcwd, cwd);
+    find_name(".neogit");
+    getcwd(cwd, sizeof(cwd));
+    if (argc == 2)
+    {
+        char tmp[1024];
+        char tmp2[1024];
+        int y = last_commit();
+        FILE *tmpfile = fopen(".neogit\\which", "r");
+        char ghtmp[1024];
+        fgets(ghtmp, sizeof(ghtmp), tmpfile);
+        char *fortmp = strrchr(ghtmp, '\n');
+        if (fortmp != NULL)
+            *fortmp = '\0';
+        fclose(tmpfile);
+        char add[1024] = ".neogit\\commits\\commit";
+        char tmptmp[1024];
+        sprintf(tmptmp, "%s\\", ghtmp);
+        strcat(add, tmptmp);
+        char tmp3[1024];
+        FILE *ptr = fopen(".neogit\\status", "w");
+        fclose(ptr);
+        stat_tree(".", ".neogit\\status");
+        ptr = fopen(".neogit\\status", "r");
+        char tmp4[1024];
+        while (fgets(tmp, sizeof(tmp), ptr) != NULL)
+        {
+            char *ggh = strrchr(tmp, '\n');
+            *ggh = '\0';
+            int x = 0, y = 0;
+            strcpy(tmp4, ".neogit\\stage_area\\");
+            strcpy(tmp3, add);
+            strcpy(tmp2, cwd);
+            strcat(tmp2, "\\");
+            char *gh = strstr(tmp, ".\\");
+            strcat(tmp2, gh + 2);
+            change_word(tmp2, '\\', '$');
+            char *tmpgh = tmp2;
+            if (*tmpgh == 'C' && *(tmpgh + 1) == ':')
+                tmpgh += 2;
+            strcat(tmp3, tmpgh);
+            strcat(tmp4, tmpgh);
+            if (is_file(tmp) == 1)
+            {
+                if (is_file(tmp4) == 1) // is it staged?
+                {
+                    x = 1;
+                }
+                if (is_file(tmp3) == 1) // is it commited?
+                {
+                    if (!compareFiles(tmp, tmp3))
+                    {
+                        y = 1; // modified
+                    }
+                    else
+                        y = -1;
+                }
+                else
+                {
+                    y = 2; // added
+                }
+                char out[2] = "\0\0";
+                if (y != -1)
+                    printf("File %s is %s\n", tmp, print_status(x, y, out));
+            }
+        }
+        fclose(ptr);
+        ptr = fopen(".neogit\\status", "w");
+        fclose(ptr);
+        char *tmptmp2 = strrchr(add, '\\');
+        *tmptmp2 = '\0';
+        stat_tree(add, ".neogit\\status");
+        ptr = fopen(".neogit\\status", "r");
+        while (fgets(tmp, sizeof(tmp), ptr) != NULL)
+        {
+            int x = 0, y = 0;
+            strcpy(tmp2, tmp);
+            strcpy(tmp3, "C:");
+            strcpy(tmp4, "");
+            strcat(tmp4, tmp2);
+            strcat(tmp3, tmp2);
+            char *tmp5 = strrchr(tmp3, '\\');
+            char tmp6[1024];
+            strcpy(tmp6, "C:");
+            strcat(tmp6, tmp5 + 1);
+            change_word(tmp6, '$', '\\');
+            strcpy(tmp4, ".neogit\\stage_area");
+            strcat(tmp4, tmp5);
+            y = -1;
+            char *tmp7 = strrchr(tmp6, '\n');
+            *tmp7 = '\0';
+            if (is_file(tmp6) != 1) // deleted?
+            {
+                y = 0;
+            }
+            if (is_file(tmp4) == 1) // staged?
+            {
+                x = 1;
+            }
+            char out[2] = "\0\0";
+            if (y != -1)
+            {
+                char *ggh = strrchr(tmp, '\n');
+                *ggh = '\0';
+                char verytmp[1024] = "commit";
+                char verytmp2[1024];
+                sprintf(verytmp2, "%d", last_commit());
+                strcat(verytmp, verytmp2);
+                char *ghghgh = strstr(tmp, verytmp);
+                while (*ghghgh != '\\')
+                {
+                    ghghgh++;
+                }
+                char forprint[1024] = "C:";
+                strcat(forprint, ghghgh + 1);
+                change_word(forprint, '$', '\\');
+                printf("File %s is %s\n", forprint, print_status(x, y, out));
+            }
+        }
+        fclose(ptr);
+    }
+    else
+    {
+        printf("invalid command!");
+    }
+    chdir(cwd);
+}
+
+int run_revert(int argc, char *const argv[])
+{
+    if (argc < 3)
+        return 1;
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
+    char add[1024];
+    strcpy(add, ".neogit\\commits\\commit");
+    find_name(".neogit");
+    FILE *ptr = fopen(".neogit\\which", "r");
+    char t[1024];
+    int x;
+    fgets(t, sizeof(t), ptr);
+    x = atoi(t);
+    fclose(ptr);
+    char *removegh = strrchr(t, '\n');
+    if (removegh != NULL)
+        *removegh = '\0';
+    int y = atoi(argv[2]);
+    char tmp[1024];
+    char thisis[1024];
+    char thatis[1024] = "";
+    strcpy(thisis, add);
+    strcat(thisis, t);
+    sprintf(thatis, "%s", remove);
+    sprintf(tmp, "%d", y);
+    fprintf(ptr, "%s", tmp);
+    strcat(add, tmp);
+    FILE *point = fopen(".neogit/tracks", "r");
+    char strin[1024];
+    while (fgets(strin, sizeof(strin), point) != NULL)
+    {
+        char *qwe = strrchr(strin, '\n');
+        if (qwe != NULL)
+            *qwe = '\0';
+        remove(strin);
+    }
+    fclose(point);
+    if (files_status(argc, argv, thisis))
+    {
+        DIR *dir = opendir(add);
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            if (strcmp(entry->d_name, "..") && strcmp(entry->d_name, "."))
+            {
+                char tmpadd[1024];
+                strcpy(tmpadd, add);
+                strcat(tmpadd, "\\");
+                strcat(tmpadd, entry->d_name);
+                char name[1024];
+                strcpy(name, entry->d_name);
+                char first[1024] = "C:";
+                strcat(first, name);
+                change_word(first, '$', '\\');
+                char ghgh[1024];
+                strcpy(ghgh, first);
+                char *this = strrchr(ghgh, '\\');
+                *this = '\0';
+                char command[2048] = "IF NOT EXIST ";
+                strcat(command, ghgh);
+                strcat(command, " mkdir ");
+                strcat(command, ghgh);
+                system(command);
+                char command2[2048];
+                strcpy(command2, "copy ");
+                strcat(command2, tmpadd);
+                strcat(command2, " ");
+                strcat(command2, first);
+                system(command2);
+            }
+        }
+        closedir(dir);
+    }
+    chdir(cwd);
+    return 0;
+}
+
 int run_checkout(int argc, char *const argv[])
 {
     if (argc < 3)
@@ -2275,9 +2770,9 @@ int run_checkout(int argc, char *const argv[])
     fgets(t, sizeof(t), ptr);
     x = atoi(t);
     fclose(ptr);
-    char *remove = strrchr(t, '\n');
-    if (remove != NULL)
-        *remove = '\0';
+    char *removegh = strrchr(t, '\n');
+    if (removegh != NULL)
+        *removegh = '\0';
     int y = atoi(argv[2]);
     char tmp[1024];
     char thisis[1024];
@@ -2288,6 +2783,16 @@ int run_checkout(int argc, char *const argv[])
     sprintf(tmp, "%d", y);
     fprintf(ptr, "%s", tmp);
     strcat(add, tmp);
+    FILE *point = fopen(".neogit/tracks", "r");
+    char strin[1024];
+    while (fgets(strin, sizeof(strin), point) != NULL)
+    {
+        char *qwe = strrchr(strin, '\n');
+        if (qwe != NULL)
+            *qwe = '\0';
+        remove(strin);
+    }
+    fclose(point);
     if (files_status(argc, argv, thisis))
     {
         DIR *dir = opendir(add);
@@ -2364,7 +2869,6 @@ int run_config(int argc, char *argv[])
             strcat(entry, argv[i]);
         }
     }
-
     if (global)
     {
         char add[1000] = "C:\\Users\\asus\\Desktop\\Globals\\global.txt";
