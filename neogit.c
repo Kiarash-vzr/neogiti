@@ -20,13 +20,138 @@
 #define __USE_MISC
 #endif
 
+int printf_color(char str[], char color)
+{
+    HANDLE hConsole;
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (color == 'r')
+        SetConsoleTextAttribute(hConsole, 4);
+    else if (color == 'b')
+        SetConsoleTextAttribute(hConsole, 3);
+    else if (color == 'y')
+        SetConsoleTextAttribute(hConsole, 6);
+    else if (color == 'k')
+        SetConsoleTextAttribute(hConsole, 8);
+    else if (color == 'p')
+        SetConsoleTextAttribute(hConsole, 5);
+    else if (color == 'g')
+        SetConsoleTextAttribute(hConsole, 2);
+    else if (color == 'R')
+        SetConsoleTextAttribute(hConsole, 64);
+    else if (color == 'B')
+        SetConsoleTextAttribute(hConsole, 48);
+    else if (color == 'Y')
+        SetConsoleTextAttribute(hConsole, 96);
+    else if (color == 'G')
+        SetConsoleTextAttribute(hConsole, 32);
+    else if (color == 'K')
+        SetConsoleTextAttribute(hConsole, 128);
+    else if (color == 'P')
+        SetConsoleTextAttribute(hConsole, 208);
+    else if (color == 'W')
+        SetConsoleTextAttribute(hConsole, 240);
+    printf("%s", str);
+    SetConsoleTextAttribute(hConsole, 7);
+    return 0;
+}
+
+int change_color(char color)
+{
+    HANDLE hConsole;
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (color == 'r')
+        SetConsoleTextAttribute(hConsole, 4);
+    else if (color == 'b')
+        SetConsoleTextAttribute(hConsole, 3);
+    else if (color == 'y')
+        SetConsoleTextAttribute(hConsole, 6);
+    else if (color == 'k')
+        SetConsoleTextAttribute(hConsole, 8);
+    else if (color == 'p')
+        SetConsoleTextAttribute(hConsole, 5);
+    else if (color == 'g')
+        SetConsoleTextAttribute(hConsole, 2);
+    else if (color == 'R')
+        SetConsoleTextAttribute(hConsole, 64);
+    else if (color == 'B')
+        SetConsoleTextAttribute(hConsole, 48);
+    else if (color == 'Y')
+        SetConsoleTextAttribute(hConsole, 96);
+    else if (color == 'G')
+        SetConsoleTextAttribute(hConsole, 32);
+    else if (color == 'K')
+        SetConsoleTextAttribute(hConsole, 128);
+    else if (color == 'P')
+        SetConsoleTextAttribute(hConsole, 208);
+    else if (color == 'W')
+        SetConsoleTextAttribute(hConsole, 240);
+    return 0;
+}
+
+int reset_color()
+{
+    HANDLE hConsole;
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, 7);
+    return 0;
+}
+
+int char_file(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return -1;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fclose(file);
+
+    return (file_size > 20000) ? 1 : 0;
+}
+
+int size_file(const char *filename)
+{
+    FILE *file = fopen(filename, "rb");
+
+    if (file == NULL)
+    {
+        perror("Error opening file");
+        return -1;
+    }
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fclose(file);
+    double mb = (double)file_size / (1048576);
+    return (mb > 5.0) ? 1 : 0;
+}
+
 int comp(const char *filename, int isCpp)
 {
     const char *compiler = isCpp ? "g++" : "gcc";
     char command[256];
-    snprintf(command, sizeof(command), "%s -o NUL -Wall -Wextra -Werror %s > NUL 2>&1", compiler, filename);
-    int result = system(command);
-    return result == 0 ? 1 : 0;
+    char output[1024];
+    snprintf(command, sizeof(command), "%s -o /dev/null -Wall -Wextra -Werror %s 2>&1", compiler, filename);
+    FILE *fp = popen(command, "r");
+    if (fp == NULL)
+    {
+        perror("Error executing popen");
+        return -1;
+    }
+    size_t bytesRead = fread(output, 1, sizeof(output) - 1, fp);
+    output[bytesRead] = '\0';
+    pclose(fp);
+    if (strstr(output, "error") != NULL || strstr(output, "warning") != NULL)
+    {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
 }
 
 typedef struct
@@ -470,7 +595,7 @@ void delete_line(const char *filename, int lineToDelete)
     }
 
     char buffer[1024];
-    int currentLine = 1;
+    int currentLine = 0;
 
     while (fgets(buffer, sizeof(buffer), originalFile) != NULL)
     {
@@ -484,11 +609,13 @@ void delete_line(const char *filename, int lineToDelete)
     fclose(originalFile);
     fclose(tempFile);
 
-    // rempvope the original file
-    if (DeleteFileA(filename))
+    // remove the original file
+    if (remove(filename) != 0)
     {
-        printf("File deleted successfully.\n");
+        perror("Error removing original file");
+        exit(EXIT_FAILURE);
     }
+    // Rename temp file to original file
     if (rename("temp.txt", filename) != 0)
     {
         perror("Error renaming file");
@@ -747,6 +874,9 @@ int checkout_file(char *filepath, int commit_ID);
 const char *format(const char *filename)
 {
     const char *extension = strrchr(filename, '.');
+    char *t = strrchr(filename, '\n');
+    if (t != NULL)
+        *t = '\0';
     if (extension != NULL)
     {
         if (strcmp(extension, ".txt") == 0)
@@ -1068,7 +1198,6 @@ int run_add(int argc, char *const argv[])
                     snprintf(cwd, sizeof(cwd), "%s\\%s", cwd, tmp + 1);
                     find_name(".neogit");
                     add_to_file(cwd, ".neogit/relstaging");
-                    add_to_file(cwd, ".neogit/tracks");
                     char line[1000];
                 }
                 else
@@ -1077,8 +1206,6 @@ int run_add(int argc, char *const argv[])
                     getcwd(cwd, sizeof(cwd));
                     find_name(".neogit");
                     tree(cwd, ".neogit/relstaging");
-                    add_to_file(cwd, ".neogit/tracks");
-                    tree_dir_include(cwd, ".neogit/tracks");
                 }
                 FILE *ptr_rel = fopen(".neogit/relstaging", "r");
                 char entry[1000];
@@ -1114,84 +1241,23 @@ int run_add(int argc, char *const argv[])
                     }
                     fclose(ptr);
                     delete_line(".neogit/staging", i + 1);
-
                     if (strcmp(argv[1], "add") == 0)
                     {
                         add_to_file(entry, ".neogit/staging");
-                    }
-                    if (strcmp(argv[1], "add") == 0)
-                    {
-                        int x = find_line(".neogit/deleting", entry);
-                        while (x != -1)
-                        {
-                            delete_line(".neogit/deleting", x + 1);
-                            x = find_line(".neogit/deleting", entry);
-                        }
                     }
                 }
                 fclose(ptr_rel);
                 remove(".neogit/relstaging");
                 FILE *del = fopen(".neogit/relstaging", "w");
                 fclose(del);
-
                 chdir(tmpcwd);
             }
             else
             {
-                char new_cwd[1000];
-                strcpy(new_cwd, cwd);
-                change_word(new_cwd, '\\', '$');
-                strcpy(new_cwd, new_cwd + 2);
-
-                find_name(".neogit");
-                char branch_name[1000];
-                out_line(4, ".neogit/config", branch_name);
-                int r = last_commit();
-                char *id;
-                sprintf(id, "%d", r);
-                struct dirent *entry;
-                char address[1000];
-                snprintf(address, sizeof(address), ".neogit\\commits\\%s", id);
-                DIR *dir = opendir(address);
-                int flag = 0;
-                if (dir != NULL)
-                {
-                    while ((entry = readdir(dir)) != NULL)
-                    {
-                        char name[1000];
-                        strcpy(name, entry->d_name);
-                        char tmp[1000];
-                        strcpy(tmp, new_cwd);
-                        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && fins(tmp, entry->d_name))
-                        {
-                            flag = 1;
-                            change_word(name, '$', '\\');
-                            char to[1000] = "C:";
-                            strcat(to, name);
-                            if (find_line(".neogit/staging", to) != -1)
-                                delete_line(".neogit/staging", find_line(".neogit/staging", to) + 1);
-                            /*mishe nabashe */ if (find_line(".neogit/deleting", to) != -1)
-                                delete_line(".neogit/deleting", find_line(".neogit/deleting", to) + 1);
-                            if (strcmp(argv[1], "reset"))
-                                add_to_file(to, ".neogit/staging");
-                            if (strcmp(argv[1], "reset"))
-                                add_to_file(to, ".neogit/deleting");
-                        }
-                    }
-                    closedir(dir);
-                }
-                if (flag == 0)
-                {
-                    char string[100];
-                    strcpy(string, argv[x]);
-                    strcat(string, " ");
-                    perror(string);
-                }
-                else
-                {
-                    add_to_file("*", ".neogit/deleting");
-                }
-                chdir(tmpcwd);
+                char string[100];
+                strcpy(string, argv[x]);
+                strcat(string, " ");
+                perror(string);
             }
         }
         if (strcmp(argv[1], "add") == 0)
@@ -1213,36 +1279,15 @@ int run_add(int argc, char *const argv[])
             if (strcmp(line, "*") != 0)
                 break;
         }
-        int flag = 0;
         for (int j = i; j >= 0; j--)
         {
             char command[1000] = "neogit reset ";
             out_line(j, ".neogit/staging", line);
             if (strcmp(line, "*") == 0)
                 break;
-            flag = flag + find_line(".neogit/deleting", line) + 1;
             strcat(command, line);
             system(command);
         }
-        if (flag)
-        {
-            n = number_of_lines(".neogit/deleting");
-            i = n - 1;
-            for (i; i >= 0; i--)
-            {
-                out_line(i, ".neogit/deleting", line);
-                if (strcmp(line, "*") != 0)
-                    break;
-            }
-            for (int j = i; j >= 0; j--)
-            {
-                out_line(j, ".neogit/deleting", line);
-                if (strcmp(line, "*") == 0)
-                    break;
-                delete_line(".neogit/deleting", j + 1);
-            }
-        }
-
         chdir(cwd);
     }
     else
@@ -1832,7 +1877,190 @@ int commit_staged_file(int commit_ID, char *filepath)
 
 int run_pre(int argc, char *const argv[])
 {
-    if (!strcmp(argv[2], "hooks") && !strcmp(argv[3], "list") && argc == 4)
+    if (argc == 2)
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+        find_name(".neogit");
+        char stage[1024];
+        FILE *file = fopen(".neogit/staging", "r");
+        int qwe = 0;
+        char *that = (char *)malloc(sizeof(char) * 1024);
+        while (fgets(stage, sizeof(stage), file) != NULL)
+        {
+            int flag = 1;
+            char *t = strrchr(stage, '\n');
+            if (t != NULL)
+            {
+                *t = '\0';
+            }
+            if (!strcmp(stage, "*"))
+            {
+                continue;
+            }
+            if (flag)
+            {
+                char line[1024];
+                char form[1024];
+                strcpy(form, format(stage));
+                char tmptmp[1024];
+                strcpy(tmptmp, stage);
+                change_word(tmptmp, '$', '\\');
+                char ghghg[1024];
+                strcpy(ghghg, tmptmp);
+                char tmpcwd[1024];
+                strcpy(tmpcwd, cwd);
+                strcat(tmpcwd, "\\.neogit\\stage_area\\");
+                char verytmp[1024];
+                int i = 0;
+                while (stage[i + 1] != '\0')
+                {
+                    verytmp[i] = stage[i + 2];
+                    i++;
+                }
+                change_word(verytmp, '\\', '$');
+                strcat(tmpcwd, verytmp);
+                strcpy(tmptmp, tmpcwd);
+                if (is_file(tmptmp) == 1)
+                {
+                    printf("%s", ghghg);
+                    printf("\n");
+                    FILE *ptr = fopen(".neogit/hooks", "r");
+                    while (fgets(line, sizeof(line), ptr) != NULL)
+                    {
+                        char *t = strrchr(line, '\n');
+                        if (t != NULL)
+                        {
+                            *t = '\0';
+                        }
+                        if (!strcmp(line, "todo-check"))
+                        {
+                            if (!strcmp(form, "c") || !strcmp(form, "cpp"))
+                            {
+                                int y = ctodo(tmptmp);
+                                if (y == 0)
+                                {
+                                    printf_color("todo-check--------------------------PASSED\n", 'g');
+                                }
+                                else
+                                {
+                                    change_color('r');
+                                    printf("todo-check--------------------------FAILED\n");
+                                    reset_color();
+                                }
+                            }
+                            else if (!strcmp(form, "txt"))
+                            {
+                                int y = ttodo(tmptmp);
+                                if (y == 1)
+                                {
+                                    change_color('g');
+                                    printf("todo-check--------------------------PASSED\n");
+                                    reset_color();
+                                }
+                                else
+                                {
+                                    change_color('r');
+                                    printf("todo-check--------------------------FAILED\n");
+                                    reset_color();
+                                }
+                            }
+                            else
+                            {
+                                printf("todo-check--------------------------SKIPPED\n", 'y');
+                            }
+                        }
+                        else if (!strcmp(line, "eof-blank-space"))
+                        {
+                            if (!strcmp(form, "c") || !strcmp(form, "cpp") || !strcmp(form, "txt"))
+                            {
+                                int y = white(tmptmp);
+                                if (y == 0)
+                                    printf_color("eof-blank-space--------------------------PASSED\n", 'g');
+                                else
+                                    printf_color("eof-blank-space--------------------------FAILED\n", 'r');
+                            }
+                            else
+                            {
+                                printf("eof-blank-space--------------------------SKIPPED\n", 'y');
+                            }
+                        }
+                        else if (!strcmp(line, "format-check"))
+                        {
+                            if (strcmp(form, "1"))
+
+                                printf_color("format-check--------------------------PASSED\n", 'g');
+                            else
+                                printf_color("format-check--------------------------FAILED\n", 'r');
+                        }
+
+                        else if (!strcmp(line, "balance-braces"))
+                        {
+                            if (!strcmp(form, "c") || !strcmp(form, "cpp") || !strcmp(form, "txt"))
+                            {
+                                int y = bracket(tmptmp);
+                                if (!y)
+                                    printf_color("balance-braces--------------------------PASSED\n", 'g');
+                                else
+                                    printf_color("balance-braces--------------------------FAILED\n", 'r');
+                            }
+                            else
+                            {
+                                printf("balance-braces--------------------------SKIPPED\n", 'y');
+                            }
+                        }
+                        else if (!strcmp(line, "static-error-check"))
+                        {
+                            if (!strcmp(form, "c") || !strcmp(form, "cpp"))
+                            {
+                                int p = 0;
+                                if (!strcmp(form, "cpp"))
+                                    p = 1;
+                                int y = comp(tmptmp, p);
+                                if (y == 1)
+                                    printf_color("static-error-check--------------------------PASSED\n", 'g');
+                                else
+                                    printf_color("static-error-check--------------------------FAILED\n", 'r');
+                            }
+                            else
+                            {
+                                printf("static-error-check--------------------------SKIPPED\n", 'y');
+                            }
+                        }
+                        else if (!strcmp(line, "file-size-check"))
+                        {
+                            int y = size_file(tmptmp);
+                            if (y == 0)
+                                printf_color("file-size-check--------------------------PASSED\n", 'g');
+                            else
+                                printf_color("file-size-check--------------------------FAILED\n", 'r');
+                        }
+                        else if (!strcmp(line, "character-limit"))
+                        {
+                            if (!strcmp(form, "c") || !strcmp(form, "cpp") || !strcmp(form, "txt"))
+                            {
+                                int y = char_file(tmptmp);
+                                if (y == 0)
+                                    printf_color("character-limit--------------------------PASSED\n", 'g');
+                                else
+                                    printf_color("character-limit--------------------------FAILED\n", 'r');
+                            }
+                            else
+                            {
+                                printf("character-limit--------------------------SKIPPED\n", 'y');
+                            }
+                        }
+                    }
+                    fclose(ptr);
+                    printf("\n");
+                }
+            }
+            qwe++;
+        }
+        fclose(file);
+        chdir(cwd);
+    }
+    else if (!strcmp(argv[2], "hooks") && !strcmp(argv[3], "list") && argc == 4)
     {
         printf("todo-check\neof-blank-space\nformat-check\nbalance-braces\nstatic-error-check\nfile-size-check\ncharacter-limit");
     }
@@ -1859,30 +2087,37 @@ int run_pre(int argc, char *const argv[])
         if (!strcmp(argv[4], "todo-check"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "eof-blank-space"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "format-check"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "balance-braces"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "static-error-check"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "file-size-check"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         else if (!strcmp(argv[4], "character-limit"))
         {
             fprintf(ptr, argv[4]);
+            fprintf(ptr, "\n");
         }
         chdir(cwd);
         fclose(ptr);
@@ -1892,145 +2127,43 @@ int run_pre(int argc, char *const argv[])
         char cwd[1024];
         getcwd(cwd, sizeof(cwd));
         find_name(".neogit");
-        FILE *ptr = fopen(".neogit/hooks", "r");
+        chdir(".neogit");
+        printf("this is ARGV[4]:%syes\ngh", argv[4]);
         if (!strcmp(argv[4], "todo-check"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "eof-blank-space"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "format-check"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "balance-braces"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "static-error-check"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "file-size-check"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
         else if (!strcmp(argv[4], "character-limit"))
         {
-            int y = find_line(".neogit/hooks", argv[4]);
-            delete_line(".neogit/hooks", y);
+            int y = find_line("hooks", argv[4]);
+            delete_line("hooks", y);
         }
-        chdir(cwd);
-        fclose(ptr);
-    }
-    else if (argc == 2)
-    {
-        char cwd[1024];
-        getcwd(cwd, sizeof(cwd));
-        find_name(".neogit");
-        FILE *ptr = fopen(".neogit/hooks", "r");
-        char *stage;
-        FILE *file = fopen(".neogit/staging", "r");
-        while (fgets(stage, sizeof(stage), file) != NULL)
-        {
-            char *t = strrchr(stage, '\0');
-            if (t != NULL)
-            {
-                *t = '\0';
-            }
-            if (!strcmp(stage, "*"))
-                continue;
-            char *line;
-            while (fgets(line, sizeof(line), ptr) != NULL)
-            {
-                char *t = strrchr(line, '\0');
-                if (t != NULL)
-                {
-                    *t = '\0';
-                }
-                char *form = format(line);
-                if (!strcmp(line, "todo-check"))
-                {
-                    if (!strcmp(form, "c") || !strcmp(form, "cpp"))
-                    {
-                        int y = ctodo(line);
-                        if (y == 1)
-                            printf("todo-check--------------------------PASSED");
-                        else
-                            printf("todo-check--------------------------FAILED");
-                    }
-                    else if (!strcmp(form, "txt"))
-                    {
-                        int y = ttodo(line);
-                        if (y == 1)
-                            printf("todo-check--------------------------PASSED");
-                        else
-                            printf("todo-check--------------------------FAILED");
-                    }
-                }
-                else if (!strcmp(line, "eof-blank-space"))
-                {
-                    if (!strcmp(form, "c") || !strcmp(form, "cpp") || !strcmp(form, "txt"))
-                    {
-                        int y = white(line);
-                        if (y == 0)
-                            printf("eof-blank-space--------------------------PASSED");
-                        else
-                            printf("eof-blank-space--------------------------FAILED");
-                    }
-                }
-                else if (!strcmp(line, "format-check"))
-                {
-                    if (!strcmp(form, "1"))
-
-                        printf("format-check--------------------------PASSED");
-                    else
-                        printf("format-check--------------------------FAILED");
-                }
-
-                else if (!strcmp(line, "balance-braces"))
-                {
-                    if (!strcmp(form, "c") || !strcmp(form, "cpp") || !strcmp(form, "txt"))
-                    {
-                        int y = bracket(line);
-                        if (y)
-                            printf("balance-braces--------------------------PASSED");
-                        else
-                            printf("balance-braces--------------------------FAILED");
-                    }
-                }
-                else if (!strcmp(line, "static-error-check"))
-                {
-                    if (!strcmp(form, "c") || !strcmp(form, "cpp"))
-                    {
-                        int p = 0;
-                        if (!strcmp(form, "cpp"))
-                            p = 1;
-                        int y = comp(line, p);
-                        if (y)
-                            printf("static-error-check--------------------------PASSED");
-                        else
-                            printf("static-error-check--------------------------FAILED");
-                    }
-                }
-                else if (!strcmp(line, "file-size-check"))
-                {
-                }
-                else if (!strcmp(line, "character-limit"))
-                {
-                }
-            }
-            fclose(file);
-        }
-        fclose(ptr);
         chdir(cwd);
     }
 }
